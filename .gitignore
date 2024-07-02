@@ -6,4 +6,5 @@
 *.ssd
 *.lst
 SERIAL
+SMTHBG
 not_in_git/

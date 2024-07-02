@@ -38,11 +38,7 @@
 
 ;
 ;
-	ORG $E000
-        ;; Fill up to FFD0 with FF
-        dc.b [(*+($E100-*))&$E100-*]$ff
-;
-        ORG     RSTART          ;V1 has $F800H
+        ORG     $C000
 ;
 ;       ENTER POWER ON SEQUENCE
 ;
@@ -58,20 +54,17 @@ START   EQU     *
         STX     NIO
 ;
 ;       ACIA INITIALISE
-;
-        LDAA    #$03    ;RESET CODE
-        STAA    ACIACS
-        NOP
-        NOP
-        NOP
-        LDAA    #$15    ;CR10:/16, 8N1 NON-INTERRUPT
-        STAA    ACIAT
+                                ;
+        JSR     SERIALINIT
 ;
 ;       COMMAND CONTROL
 ;
-CONTRL  LDAA    ACIAT
-        STAA    ACIACS
-        ;;
+CONTRL
+
+        ;; LDAA    ACIAT
+        ;; STAA    ACIACS
+
+   ;;
         ;; What is this? Done twice?
         ;;
         LDS     #STACK  ; SET CONTRL STACK POINTER
@@ -357,17 +350,9 @@ CR8     BRA     IFILL1
 ;
 SAV     STX     XTEMP
         RTS
-;
-;       INPUT ONE CHAR INTO A-REGISTER
-;
-; |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
-; | IRQ |  PE | ROV |  FE | CTS | DCD | TDR | RDR |
-;
+
 INEEE   BSR     SAV
-IN1     LDAA    ACIACS
-        ASRA                    ;
-        BCC     IN1     ;RECEIVE NOT READY
-        LDAA    ACIADA  ;INPUT CHARACTER
+IN1     JSR     SERIALINCH
         ANDA    #$7F    ;RESET PARITY BIT
         CMPA    #$7F
         BEQ     IN1     ;IF RUBOUT, GET NEXT CHAR
@@ -377,14 +362,36 @@ IN1     LDAA    ACIACS
 ;
 ;       OUTPUT ONE CHAR
 ;
-OUTEEE  PSHA
-OUTEEE1 LDAA    ACIACS
-        ASRA
-        ASRA
-        BCC     OUTEEE1
-        PULA
-        STAA    ACIADA
-        RTS
+OUTEEE  JMP     SERIALOUTCH
+
+;; ;
+;; ;       INPUT ONE CHAR INTO A-REGISTER
+;; ;
+;; ; |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
+;; ; | IRQ |  PE | ROV |  FE | CTS | DCD | TDR | RDR |
+;; ;
+;; INEEE   BSR     SAV
+;; IN1     LDAA    ACIACS
+;;         ASRA                    ;
+;;         BCC     IN1     ;RECEIVE NOT READY
+;;         LDAA    ACIADA  ;INPUT CHARACTER
+;;         ANDA    #$7F    ;RESET PARITY BIT
+;;         CMPA    #$7F
+;;         BEQ     IN1     ;IF RUBOUT, GET NEXT CHAR
+;;         TST     ECHO
+;;         BLE     OUTEEE
+;;         RTS
+;; ;
+;; ;       OUTPUT ONE CHAR
+;; ;
+;; OUTEEE  PSHA
+;; OUTEEE1 LDAA    ACIACS
+;;         ASRA
+;;         ASRA
+;;         BCC     OUTEEE1
+;;         PULA
+;;         STAA    ACIADA
+;;         RTS
 ;
 ; changes from V1 are above
 ;
@@ -1131,15 +1138,18 @@ QUESTN  LDAA    #"?"            ; Load question mark
 RECOVER LDX     TEMPX1          ; Restore "X"
         PULA                    ; Restore A
         JMP     CONTRL          ; Jump to exit
-;
-GETCHAR PSHB
-WAITIN  LDAB ACIACS             ; LOAD ACIA CONTROL REGISTER
-        ASRB                    ; SHIFT RIGHT  ACIADA
-        BCC     WAITIN          ; IF CARRY NOT SET THEN AGAIN
-        LDAA    ACIADA          ; LOAD DATA REGISTER
-        PULB                    ; RESTORE B REGISTER
-        BSR     OUTPUTA         ; ECHO INPUT
-        RTS
+
+GETCHAR JSR     SERIALINCH
+        JMP     SERIALOUTCH
+
+;; GETCHAR PSHB
+;; WAITIN  LDAB ACIACS             ; LOAD ACIA CONTROL REGISTER
+;;         ASRB                    ; SHIFT RIGHT  ACIADA
+;;         BCC     WAITIN          ; IF CARRY NOT SET THEN AGAIN
+;;         LDAA    ACIADA          ; LOAD DATA REGISTER
+;;         PULB                    ; RESTORE B REGISTER
+;;         BSR     OUTPUTA         ; ECHO INPUT
+;;         RTS
 ;
 GETADD  JSR     GETHEX          ; Read in byte
         STAA    ADDRESS         ; store in first part of address
@@ -1179,15 +1189,16 @@ INCSTACK INS                    ; Restore stack position
         INS                     ; Restore stack position
         BRA     QUESTN         ; Go send ? and exit
 ;
-OUTPUTA PSHB                    ; SAVE B
-WAITOUT LDAB ACIACS             ; LOAD ACIA CONTROL REGISTER
-        ASRB                    ; SHIFT RIGHT
-        ASRB                    ; SHIFT RIGHT
-        BCC     WAITOUT ; IF CARRY NOT SET DO AGAIN
-        STAA ACIADA             ; SEND CHARACTOR TO ACIA
-        PULB                    ; RESTORE B
-        RTS                     ; RETURN FROM ROUTINE
-;
+;; OUTPUTA PSHB                    ; SAVE B
+;; WAITOUT LDAB ACIACS             ; LOAD ACIA CONTROL REGISTER
+;;         ASRB                    ; SHIFT RIGHT
+;;         ASRB                    ; SHIFT RIGHT
+;;         BCC     WAITOUT ; IF CARRY NOT SET DO AGAIN
+;;         STAA ACIADA             ; SEND CHARACTOR TO ACIA
+;;         PULB                    ; RESTORE B
+;;         RTS                     ; RETURN FROM ROUTINE
+OUTPUTA JMP     SERIALOUTCH
+                                ;
 OUTSTR  LDAA    0,X                     ; Read String
         CMPA    #$4             ; Is it EOT?
         BEQ     STEXIT          ; Exit if EOT
@@ -1195,28 +1206,17 @@ OUTSTR  LDAA    0,X                     ; Read String
         INX                     ; Point at next character
         BRA     OUTSTR          ; Loop and read next
 STEXIT  RTS                     ;
+
+   include   "serialinit"
+   include   "serial9600"
+
+SERIALINCH   EQU INCH9600
+SERIALOUTCH  EQU OUTCH9600
+
+
 ;;;
 RFINI   EQU *
 ;;;
-        ;; Fill up to FFD0 with FF
-        dc.b [(*+($FFF8-*))&$FFF8-*]$ff
-;
-ROMSIZE EQU RFINI - RSTART + 8  ; 8 bytes for the vectors
-;
-;END of V2 S-loader
-;
-;   STARTUP VECTORS $FFF8 -$FFFF
-;
-        ORG $FFF8
-;
-        FDB IO
-        FDB SWI
-        FDB POWDWN
-        FDB START
-;
-; Version 1 has table of RAM locations at $A000H
-        END
-;
 ;asl -i . -D _SIM -L smithbug.asm
 ;p2hex +5 -F Moto -r '$-$' smithbug.p smithbug.s19
 ;srec_info smithbug.s19
