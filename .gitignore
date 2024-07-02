@@ -1,0 +1,8 @@
+*~
+#*
+*.hex
+*.p
+*.bin
+*.ssd
+*.lst
+SERIAL

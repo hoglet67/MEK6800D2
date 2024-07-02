@@ -1,118 +1,264 @@
 6800 Bit Banged Serial I/O at 9,600 Baud
 ========================================
 
-OUTCH:
-	PSH A
-	PSH B
-	LDA B	#10		; total of 10 bits to send
+; Output port bit
+OUTMASK	EQU	$01		; Bit 0 -- DO NOT CHANGE!
+
+; Input port bit
+INMASK	EQU	$02		; Bit 1
+
+; PIA Port A
+PORT	EQU	$8004
+
+; Working variables
+TMP	EQU	$0080		; Must be direct page
+MASK    EQU     $0080		; Can be anywhere
+
+
+; Various Delays (invoked with JSR)
+; for one cycle less, invoke with BSR
+D34:	NOP			;  2
+D32:	NOP			;  2
+D30:	NOP			;  2
+D28:	NOP			;  2
+D26:	NOP			;  2
+D24:	NOP			;  2
+D22:	NOP			;  2
+D20:	NOP			;  2
+D18:	NOP			;  2
+D16:	NOP			;  2
+D14:	RTS			;  5
+				;  9 (JSR) or 8 (BSR)
+; 27 bytes
+
+OUTCH9600:
+	PSHA
+	PSHB
+	LDAB	#10		; total of 10 bits to send
 	CLC			; start bit
-OLOOP:
-	PSH B			;  4
-	LDA B   port		;  4
-	AND B   #$FE		;  2
-	ADC B	#$00		;  2 - C = bit to send
-	STA B   port		;  5
-	STA B   port		;  5 - waste 5 cycles (STS addr8 also 5 cycles)
-	PUL B			;  4
+LOOP:
+	PSHB			;  4
+	LDAB	PORT		;  4
+	ANDB	#$FF-OUTMASK	;  2
+	ADCB	#$00		;  2 - C = bit to send
+	STAB	PORT		;  5
+	PULB			;  4
 	SEC			;  2 - stop bit
-	ROR A			;  2 - shift next bit into C
-	DEC B			;  2
-	JSR     D28             ; 28 - waste 28 cycles JSR=9 RTS=5
-	BNE	OLOOP		;  4
-	                        ; 64 cycles = 9600 baud
-	PUL B
-	PUL A
+	RORA			;  2 - shift next bit into C
+	DECB			;  2
+	BSR	D34             ; 33
+	BNE	LOOP		;  4
+	                        ; 64 cycles in loop = 9600 baud
+	PULB
+	PULA
 	RTS
 
-INCH:
-	LDA A	#&02
-START0:	BIT A   port		;  wait for line idle
-	BEQ     START0		;
-START1:	BIT A   port		;  wait for start bit
+; 44 bytes
+
+INCH9600V1:
+	PSHB
+	LDAA	#$80		; b7 shifted down acts as a counter
+	LDAB	#INMASK
+START0:	BITB	PORT		; wait for line idle
+	BEQ	START0		;
+START1:	BITB	PORT		; wait for start bit
 	BNE	START1		;  4
-	JSR	D14		; 14
-	LDA A   #&80		;  2
-ILOOP:	PSH A			;  4
-	LDA A	port		;  4 - first sample 28->34 cycles after edge
-	AND A   #$02		;  2
-	ADC A   #$FE		;  2
-	PUL A			;  4
-	ROR A			;  2
-	JSR	D28		; 28
-	JSR	D14		; 14
-	BCC	ILOOP		;  4
-				; 64 cycles = 9600 baud
+	JSR	D20		; 20
+	BITB	PORT		;  4 - confirm start bit 28->36 cycle after edge
+	BNE	START1		;  4
+	JSR	D30		; 30
+LOOP:	JSR	D26		; 26
+	LDAB	PORT		;  4 - sample data bit 64 cycles later
+	ANDB	#$02		;  2
+	ADCB	#$100-INMASK	;  2
+	RORA			;  2
+	JSR	D24		; 24
+	BCC	LOOP		;  4
+				; 64 cycles in loop = 9,600 baud
+	PULB
 	RTS
 
-D28:	JSR D14			;  9
-D14:    RTS			;  5
+; 46 bytes
+
+INCH9600V2:
+	LDAA	#$80		; b7 shifted down acts as a counter
+	PSHA
+	LDAA	#INMASK
+START0:	BITA	PORT		; wait for line idle
+	BEQ	START0		;
+START1:	BITA	PORT		; wait for start bit
+	BNE	START1		;  4
+	JSR	D20		; 20
+	BITA	PORT		;  4 - confirm start bit 28->36 cycle after edge
+	BNE	START1		;  4
+	JSR	D28		; 28
+LOOP:	JSR	D28		; 28
+	LDAA	PORT		;  4 - sample data bit 64 cycles later
+	ANDA	#INMASK		;  2
+	ADCA	#$100-INMASK	;  2
+	PULA			;  4
+	RORA			;  2
+	PSHA			;  4
+	JSR	D14		; 14
+	BCC	LOOP		;  4
+				; 64 cycles in loop = 9,600 baud
+	PULA
+	RTS
+
+
 
 6800 Bit Banged Serial I/O at 19,200 Baud
 =========================================
 
+; Uses ZP (or ABS) TMP
+; 29 bytes
+
 OUTCH19200V1:
-	PSH A
-	PSH B
-	LDA B   #$FE
-	STA B   mask
-	LDA B	#10		; total of 10 bits to send
+	PSHA
+	PSHB
+	STAA	TMP
+	LDAA	#10		; total of 10 bits to send
 	CLC			; start bit
 LOOP:
-	PSH B			;  4
-	LDA B   port		;  4
-	AND B   mask		;  3
-	ADC B	#$00		;  2 - C = bit to send
-	STA B   port		;  5
-	PUL B			;  4
+	LDAB	PORT		;  4
+	ANDB	#$FF-OUTMASK	;  2
+	ADCB	#$00		;  2 - C = bit to send
+	STAB	PORT		;  5
+	STAB	PORT		;  5 - waste 5 cycles
 	SEC			;  2 - stop bit
-	ROR A			;  2 - shift next bit into C
-	DEC B			;  2
+	ROR	TMP		;  6 - shift next bit into C
+	DECA			;  2
 	BNE	LOOP		;  4
-	                        ; 32 cycles = 19200 baud
-	PUL B
-	PUL A
+	                        ; 32 cycles in loop = 19200 baud
+	PULB
+	PULA
 	RTS
 
+; Uses a ZP mask
+; 29 bytes
 
 OUTCH19200V2:
-	PSH A
-	PSH B
-	LDA B	#10		; total of 10 bits to send
+	PSHA
+	PSHB
+	LDAB	#$FF-OUTMASK
+	STAB	MASK
+	LDAB	#10		; total of 10 bits to send
 	CLC			; start bit
 LOOP:
-	ROL 	port		;  6
-	JSR	D14		; 14
-	NOP			;  2
+	PSHB			;  4
+	LDAB	PORT		;  4
+	ANDB	MASK		;  3
+	ADCB	#$00		;  2 - C = bit to send
+	STAB	PORT		;  5
+	PULB			;  4
 	SEC			;  2 - stop bit
-	ROR A			;  2 - shift next bit into C
-	DEC B			;  2
+	RORA			;  2 - shift next bit into C
+	DECB			;  2
 	BNE	LOOP		;  4
-	                        ; 32 cycles = 19200 baud
-	PUL B
-	PUL A
+	                        ; 32 cycles in loop = 19200 baud
+	PULB
+	PULA
 	RTS
 
 
+; Uses ROL PORT (euch!)
+; 19 bytes
 
-INCH19200:
-	LDA A   #$80
-	PSH A
-	LDA A	#&02
-START0:	BIT A   port		;  wait for line idle
-	BEQ     START0		;
-START1:	BIT A   port		;  wait for start bit
+OUTCH19200V3:
+	PSHA
+	PSHB
+	LDAB	#10		; total of 10 bits to send
+	CLC			; start bit
+LOOP:
+	ROL	PORT		;  6
+	JSR	D16		; 16
+	SEC			;  2 - stop bit
+	RORA			;  2 - shift next bit into C
+	DECB			;  2
+	BNE	LOOP		;  4
+	                        ; 32 cycles in loop = 19200 baud
+	PULB
+	PULA
+	RTS
+
+
+; 40 bytes
+
+INCH19200V1:
+	PSHB
+	LDAA	#$80		; b7 shifted down acts as a counter
+	LDAB	#INMASK
+START0:	BITB	PORT		; wait for line idle
+	BEQ	START0		;
+START1:	BITB	PORT		; wait for start bit
 	BNE	START1		;  4
-LOOP:	NOP			;  2
-	NOP			;  2
-	LDA A	port		;  4 - first sample 12->20 cycles after edge
-	AND A   #$02		;  2
-	ADC A   #$FE		;  2
-	PUL A			;  4
-	ROR A			;  2
-	PSH A			;  4
 	NOP			;  2
 	NOP			;  2
+	BITB	PORT		;  4 - confirm start bit 12->20 cycle after edge
+	BNE	START1		;  4
+	JSR	D24		; 24
+LOOP:	LDAB	PORT		;  4 - sample data bit 32 cycles later
+	ANDB	#INMASK		;  2
+	ADCB	#$100-INMASK	;  2
+	RORA			;  2
+	JSR	D18		; 18
+	BCC	LOOP		;  4
+				; 32 loop in cycles = 9,600 baud
+	PULB
+	RTS
+
+; 42 bytes
+
+INCH19200V2:
+	LDAA	#$80		; b7 shifted down acts as a counter
+	PSHA
+	LDAA	#INMASK
+START0:	BITA	PORT		; wait for line idle
+	BEQ	START0		;
+START1:	BITA	PORT		; wait for start bit
+	BNE	START1		;  4
 	NOP			;  2
-	BCC	LOOP		;  4 - loop is 32 cycles
-	PUL A
+	NOP			;  2
+	BITA	PORT		;  4 - confirm start bit 12->20 cycle after edge
+	BNE	START1		;  4
+	JSR	D24		; 24
+LOOP:	LDAA	PORT		;  4 - sample data bit 32 cycles later
+	ANDA	#INMASK		;  2
+	ADCA	#$100-INMASK	;  2
+	PULA			;  4
+	RORA			;  2
+	PSHA			;  4
+	PULA			;  4
+	PSHA			;  4
+	NOP			;  2
+	BCC	LOOP		;  4
+				; 32 loop in cycles = 9,600 baud
+	PULA
+	RTS
+
+
+; 44 bytes
+
+INCH19200V3:
+	LDAA	#$80		; b7 shifted down acts as a counter
+	STAA    tmp
+	PSHA
+	LDAA	#INMASK
+START0:	BITA	PORT		; wait for line idle
+	BEQ	START0		;
+START1:	BITA	PORT		; wait for start bit
+	BNE	START1		;  4
+	NOP			;  2
+	NOP			;  2
+	BITA	PORT		;  4 - confirm start bit 12->20 cycle after edge
+	BNE	START1		;  4
+	JSR	D24		; 24
+LOOP:	LDAA	PORT		;  4 - sample data bit 32 cycles later
+	ANDA	#INMASK		;  2
+	ADCA	#$100-INMASK	;  2
+	ROR	tmp		;  6
+	JSR     D14		; 14
+	BCC	LOOP		;  4
+				; 32 loop in cycles = 9,600 baud
+	LDAA	tmp
 	RTS
