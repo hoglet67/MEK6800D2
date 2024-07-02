@@ -1,0 +1,118 @@
+6800 Bit Banged Serial I/O at 9,600 Baud
+========================================
+
+OUTCH:
+	PSH A
+	PSH B
+	LDA B	#10		; total of 10 bits to send
+	CLC			; start bit
+OLOOP:
+	PSH B			;  4
+	LDA B   port		;  4
+	AND B   #$FE		;  2
+	ADC B	#$00		;  2 - C = bit to send
+	STA B   port		;  5
+	STA B   port		;  5 - waste 5 cycles (STS addr8 also 5 cycles)
+	PUL B			;  4
+	SEC			;  2 - stop bit
+	ROR A			;  2 - shift next bit into C
+	DEC B			;  2
+	JSR     D28             ; 28 - waste 28 cycles JSR=9 RTS=5
+	BNE	OLOOP		;  4
+	                        ; 64 cycles = 9600 baud
+	PUL B
+	PUL A
+	RTS
+
+INCH:
+	LDA A	#&02
+START0:	BIT A   port		;  wait for line idle
+	BEQ     START0		;
+START1:	BIT A   port		;  wait for start bit
+	BNE	START1		;  4
+	JSR	D14		; 14
+	LDA A   #&80		;  2
+ILOOP:	PSH A			;  4
+	LDA A	port		;  4 - first sample 28->34 cycles after edge
+	AND A   #$02		;  2
+	ADC A   #$FE		;  2
+	PUL A			;  4
+	ROR A			;  2
+	JSR	D28		; 28
+	JSR	D14		; 14
+	BCC	ILOOP		;  4
+				; 64 cycles = 9600 baud
+	RTS
+
+D28:	JSR D14			;  9
+D14:    RTS			;  5
+
+6800 Bit Banged Serial I/O at 19,200 Baud
+=========================================
+
+OUTCH19200V1:
+	PSH A
+	PSH B
+	LDA B   #$FE
+	STA B   mask
+	LDA B	#10		; total of 10 bits to send
+	CLC			; start bit
+LOOP:
+	PSH B			;  4
+	LDA B   port		;  4
+	AND B   mask		;  3
+	ADC B	#$00		;  2 - C = bit to send
+	STA B   port		;  5
+	PUL B			;  4
+	SEC			;  2 - stop bit
+	ROR A			;  2 - shift next bit into C
+	DEC B			;  2
+	BNE	LOOP		;  4
+	                        ; 32 cycles = 19200 baud
+	PUL B
+	PUL A
+	RTS
+
+
+OUTCH19200V2:
+	PSH A
+	PSH B
+	LDA B	#10		; total of 10 bits to send
+	CLC			; start bit
+LOOP:
+	ROL 	port		;  6
+	JSR	D14		; 14
+	NOP			;  2
+	SEC			;  2 - stop bit
+	ROR A			;  2 - shift next bit into C
+	DEC B			;  2
+	BNE	LOOP		;  4
+	                        ; 32 cycles = 19200 baud
+	PUL B
+	PUL A
+	RTS
+
+
+
+INCH19200:
+	LDA A   #$80
+	PSH A
+	LDA A	#&02
+START0:	BIT A   port		;  wait for line idle
+	BEQ     START0		;
+START1:	BIT A   port		;  wait for start bit
+	BNE	START1		;  4
+LOOP:	NOP			;  2
+	NOP			;  2
+	LDA A	port		;  4 - first sample 12->20 cycles after edge
+	AND A   #$02		;  2
+	ADC A   #$FE		;  2
+	PUL A			;  4
+	ROR A			;  2
+	PSH A			;  4
+	NOP			;  2
+	NOP			;  2
+	NOP			;  2
+	BCC	LOOP		;  4 - loop is 32 cycles
+	PUL A
+	RTS
