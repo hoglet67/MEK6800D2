@@ -14,27 +14,17 @@ TMP     EQU     $0080           ; Must be direct page
 MASK    EQU     $0080           ; Can be anywhere
 
 
-        JMP     INIT
-        JMP     OUTCH9600
-        JMP     INCH9600
-        JMP     TEST9600
-        JMP     OUTCH19200
-        JMP     INCH19200
-        JMP     TEST19200
-
-; Various Delays (invoked with JSR)
-; for one cycle less, invoke with BSR
-D34:    NOP                     ;  2
-D32:    NOP                     ;  2
-D30:    NOP                     ;  2
-D28:    NOP                     ;  2
-D26:    NOP                     ;  2
-D24:    NOP                     ;  2
-D22:    NOP                     ;  2
-D20:    NOP                     ;  2
-D18:    NOP                     ;  2
-D16:    NOP                     ;  2
-D14:    RTS                     ;  5
+        BSR     INIT
+        SWI
+        JMP     OUTCH9600       ; C003
+        JMP     INCH9600        ; C006
+        JMP     TEST9600        ; C009
+        JMP     OUTCH19200      ; C00C
+        JMP     INCH19200       ; C00F
+        JMP     TEST19200       ; C012
+        JMP     OUTCH38400      ; C015
+        JMP     INCH38400       ; C018
+        JMP     TEST38400       ; C01B
 
 INIT:
         LDAA    PORT+1
@@ -50,6 +40,20 @@ INIT:
         ORAB    #$01
         STAB    PORT
         RTS
+
+; Various Delays (invoked with JSR)
+; for one cycle less, invoke with BSR
+D34:    NOP                     ;  2
+D32:    NOP                     ;  2
+D30:    NOP                     ;  2
+D28:    NOP                     ;  2
+D26:    NOP                     ;  2
+D24:    NOP                     ;  2
+D22:    NOP                     ;  2
+D20:    NOP                     ;  2
+D18:    NOP                     ;  2
+D16:    NOP                     ;  2
+D14:    RTS                     ;  5
 
 TEST9600:
         SECTION TEST9600
@@ -80,6 +84,19 @@ LOOP2:
         JMP     LOOP2
         ENDSECTION
 
+TEST38400:
+        SECTION TEST38400
+        LDAA    #$20
+LOOP1:
+        JSR     OUTCH38400
+        INCA
+        CMPA    #$7F
+        BNE     LOOP1
+LOOP2:
+        JSR     INCH38400
+        JSR     OUTCH38400
+        JMP     LOOP2
+        ENDSECTION
 
 
 ; 6800 Bit Banged Serial I/O at 9,600 Baud
@@ -137,8 +154,8 @@ LOOP:   JSR     D26             ; 26
         ENDSECTION
 
 
-;6800 Bit Banged Serial I/O at 19,200 Baud
-;=========================================
+; 6800 Bit Banged Serial I/O at 19,200 Baud
+; =========================================
 
 OUTCH19200:
         SECTION OUTCH19200
@@ -186,6 +203,54 @@ LOOP:   LDAB    PORT            ;  4 - sample data bit 32 cycles later
         JSR     D18             ; 18
         BCC     LOOP            ;  4
                                 ; 32 loop in cycles = 19,200 baud
+        PULB
+        RTS
+        ENDSECTION
+
+; 6800 Bit Banged Serial I/O at 38,400 Baud
+; =========================================
+
+
+OUTCH38400:
+        SECTION OUTCH38400
+        PSHA
+        PSHB
+        LDAB    #10             ; total of 10 bits to send
+        CLC                     ; start bit
+LOOP:
+        ROL     PORT            ;  6
+        SEC                     ;  2 - stop bit
+        RORA                    ;  2 - shift next bit into C
+        DECB                    ;  2
+        BNE     LOOP            ;  4
+                                ; 16 cycles in loop = 38,400 baud
+        PULB
+        PULA
+        RTS
+        ENDSECTION
+
+; Note: the start bit samplimng error of 8 bits is now half a cycle!
+
+INCH38400:
+        SECTION INCH38400
+        PSHB
+        LDAA    #$80            ; b7 shifted down acts as a counter
+        LDAB    #INMASK
+START0: BITB    PORT            ; wait for line idle
+        BEQ     START0          ;
+START1: BITB    PORT            ; wait for start bit
+        BNE     START1          ;  4
+        PSHA                    ;  4 }
+        PULA                    ;  4 } 12 cycles of delay
+        NOP                     ;  2 }
+        NOP                     ;  2 }
+LOOP:   LDAB    PORT            ;  4 - sample data bit 20->28 cycles later
+        ANDB    #INMASK         ;  2
+        ADDB    #$100-INMASK    ;  2
+        RORA                    ;  2
+        NOP                     ;  2
+        BCC     LOOP            ;  4
+                                ; 16 loop in cycles = 38,400 baud
         PULB
         RTS
         ENDSECTION
