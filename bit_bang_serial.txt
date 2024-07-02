@@ -48,7 +48,7 @@ LOOP:
         DECB                    ;  2
         BSR     D34             ; 33
         BNE     LOOP            ;  4
-                                ; 64 cycles in loop = 9600 baud
+                                ; 64 cycles in loop = 9,600 baud
         PULB
         PULA
         RTS
@@ -69,8 +69,8 @@ START1: BITB    PORT            ; wait for start bit
         JSR     D30             ; 30
 LOOP:   JSR     D26             ; 26
         LDAB    PORT            ;  4 - sample data bit 64 cycles later
-        ANDB    #$02            ;  2
-        ADCB    #$100-INMASK    ;  2
+        ANDB    #INMASK         ;  2
+        ADDB    #$100-INMASK    ;  2
         RORA                    ;  2
         JSR     D24             ; 24
         BCC     LOOP            ;  4
@@ -95,7 +95,7 @@ START1: BITA    PORT            ; wait for start bit
 LOOP:   JSR     D28             ; 28
         LDAA    PORT            ;  4 - sample data bit 64 cycles later
         ANDA    #INMASK         ;  2
-        ADCA    #$100-INMASK    ;  2
+        ADDA    #$100-INMASK    ;  2
         PULA                    ;  4
         RORA                    ;  2
         PSHA                    ;  4
@@ -129,7 +129,7 @@ LOOP:
         ROR     TMP             ;  6 - shift next bit into C
         DECA                    ;  2
         BNE     LOOP            ;  4
-                                ; 32 cycles in loop = 19200 baud
+                                ; 32 cycles in loop = 19,200 baud
         PULB
         PULA
         RTS
@@ -155,7 +155,7 @@ LOOP:
         RORA                    ;  2 - shift next bit into C
         DECB                    ;  2
         BNE     LOOP            ;  4
-                                ; 32 cycles in loop = 19200 baud
+                                ; 32 cycles in loop = 19,200 baud
         PULB
         PULA
         RTS
@@ -176,7 +176,7 @@ LOOP:
         RORA                    ;  2 - shift next bit into C
         DECB                    ;  2
         BNE     LOOP            ;  4
-                                ; 32 cycles in loop = 19200 baud
+                                ; 32 cycles in loop = 19,200 baud
         PULB
         PULA
         RTS
@@ -199,11 +199,11 @@ START1: BITB    PORT            ; wait for start bit
         JSR     D24             ; 24
 LOOP:   LDAB    PORT            ;  4 - sample data bit 32 cycles later
         ANDB    #INMASK         ;  2
-        ADCB    #$100-INMASK    ;  2
+        ADDB    #$100-INMASK    ;  2
         RORA                    ;  2
         JSR     D18             ; 18
         BCC     LOOP            ;  4
-                                ; 32 loop in cycles = 9,600 baud
+                                ; 32 loop in cycles = 19,200 baud
         PULB
         RTS
 
@@ -224,7 +224,7 @@ START1: BITA    PORT            ; wait for start bit
         JSR     D24             ; 24
 LOOP:   LDAA    PORT            ;  4 - sample data bit 32 cycles later
         ANDA    #INMASK         ;  2
-        ADCA    #$100-INMASK    ;  2
+        ADDA    #$100-INMASK    ;  2
         PULA                    ;  4
         RORA                    ;  2
         PSHA                    ;  4
@@ -232,7 +232,7 @@ LOOP:   LDAA    PORT            ;  4 - sample data bit 32 cycles later
         PSHA                    ;  4
         NOP                     ;  2
         BCC     LOOP            ;  4
-                                ; 32 loop in cycles = 9,600 baud
+                                ; 32 loop in cycles = 19,200 baud
         PULA
         RTS
 
@@ -255,10 +255,55 @@ START1: BITA    PORT            ; wait for start bit
         JSR     D24             ; 24
 LOOP:   LDAA    PORT            ;  4 - sample data bit 32 cycles later
         ANDA    #INMASK         ;  2
-        ADCA    #$100-INMASK    ;  2
+        ADDA    #$100-INMASK    ;  2
         ROR     tmp             ;  6
         JSR     D14             ; 14
         BCC     LOOP            ;  4
-                                ; 32 loop in cycles = 9,600 baud
+                                ; 32 loop in cycles = 19,200 baud
         LDAA    tmp
+        RTS
+
+
+
+
+6800 Bit Banged Serial I/O at 38,400 Baud
+=========================================
+
+
+OUTCH38400V1:
+        PSHA
+        PSHB
+        LDAB    #10             ; total of 10 bits to send
+        CLC                     ; start bit
+LOOP:
+        ROL     PORT            ;  6
+        SEC                     ;  2 - stop bit
+        RORA                    ;  2 - shift next bit into C
+        DECB                    ;  2
+        BNE     LOOP            ;  4
+                                ; 16 cycles in loop = 38,400 baud
+        PULB
+        PULA
+        RTS
+
+INCH38400V1:
+        PSHB
+        LDAA    #$80            ; b7 shifted down acts as a counter
+        LDAB    #INMASK
+START0: BITB    PORT            ; wait for line idle
+        BEQ     START0          ;
+START1: BITB    PORT            ; wait for start bit (the samplimg error here is 8 cycles = half a bit)
+        BNE     START1          ;  4
+        PSHA                    ;  4
+        PULA                    ;  4
+        NOP                     ;  2
+        NOP                     ;  2
+LOOP:   LDAB    PORT            ;  4 - sample data bit 20->28 cycles later
+        ANDB    #INMASK         ;  2
+        ADDB    #$100-INMASK    ;  2
+        RORA                    ;  2
+        NOP                     ;  2
+        BCC     LOOP            ;  4
+                                ; 16 loop in cycles = 38,400 baud
+        PULB
         RTS
