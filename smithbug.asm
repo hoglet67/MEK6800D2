@@ -1095,10 +1095,10 @@ S1STRING        FCC     "\r\nThis S1 load has entered system scratch area\r\n"
 SLOAD   EQU     *
         PSHA                    ; Save A register
         STX     TEMPX1          ; Save X register
-GOAGAIN BSR     GETCHAR         ; Get first character from ACIA
+GOAGAIN JSR     GETCHAR         ; Get first character from ACIA
         CMPA    #"S"            ; Is it "S"
         BNE     GOAGAIN         ; If not go read again
-        BSR     GETCHAR         ; Get second character in frame
+        JSR     GETCHAR         ; Get second character in frame
         CMPA    #"9"            ; Is it "9"
         BEQ     RECOVER         ; If "9" go and end read
         CMPA    #"1"            ; Is it a "1"
@@ -1128,19 +1128,16 @@ GETCNT  BSR     GETHEX          ; Get the byte number
         BRA     GETCNT          ; go get another byte
 ;
 S1EXIT  LDX     #S1STRING       ; Protect System Scratch Abort S1
-        BSR     OUTSTR          ; Print abort string
+        JSR     OUTSTR          ; Print abort string
         BRA     RECOVER         ; Back to console prompt
 ;
 INCOUNT INC     TEMPA           ; Increment tempa
         BEQ     GOAGAIN         ; If zero go for another frame
 QUESTN  LDAA    #"?"            ; Load question mark
-        BSR     OUTPUTA         ; Send to console
+        JSR     OUTPUTA         ; Send to console
 RECOVER LDX     TEMPX1          ; Restore "X"
         PULA                    ; Restore A
         JMP     CONTRL          ; Jump to exit
-
-GETCHAR JSR     SERIALINCH
-        JMP     SERIALOUTCH
 
 ;; GETCHAR PSHB
 ;; WAITIN  LDAB ACIACS             ; LOAD ACIA CONTROL REGISTER
@@ -1188,7 +1185,11 @@ RETURN2 RTS                     ; Return from sub routine
 INCSTACK INS                    ; Restore stack position
         INS                     ; Restore stack position
         BRA     QUESTN         ; Go send ? and exit
-;
+
+        include   "serialinit"
+GETCHAR
+        include   "serial9600"
+
 ;; OUTPUTA PSHB                    ; SAVE B
 ;; WAITOUT LDAB ACIACS             ; LOAD ACIA CONTROL REGISTER
 ;;         ASRB                    ; SHIFT RIGHT
@@ -1207,12 +1208,8 @@ OUTSTR  LDAA    0,X                     ; Read String
         BRA     OUTSTR          ; Loop and read next
 STEXIT  RTS                     ;
 
-   include   "serialinit"
-   include   "serial9600"
-
 SERIALINCH   EQU INCH9600
 SERIALOUTCH  EQU OUTCH9600
-
 
 ;;;
 RFINI   EQU *

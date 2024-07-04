@@ -12,8 +12,6 @@
         JMP     INCH38400       ; C018
         JMP     TEST38400       ; C01B
 
-        include "serialinit.inc"
-
 TEST9600:
         SECTION TEST9600
         LDAA    #$20
@@ -56,6 +54,9 @@ LOOP2:
         JSR     OUTCH38400
         JMP     LOOP2
         ENDSECTION
+
+        include "serialinit.inc"
+
 
         include "serial9600.inc"
         include "serial19200.inc"
